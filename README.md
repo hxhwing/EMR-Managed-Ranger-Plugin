@@ -346,6 +346,8 @@ RangerPlugin需要两项IAM配置：
 在RangerPluginDataAccessRole的Trust relationship中，需要Trust EMR_EC2_DefaultRole 
 
 ```
+##IAM Policy: RangerPluginDataAccessPolicy
+
 {
   "Version": "2012-10-17",
   "Statement": [
@@ -391,81 +393,14 @@ RangerPlugin需要两项IAM配置：
   ]
 }
 
-## IAM Policy示例如下：RangerPluginDataAccessPolicy 
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Sid": "CloudwatchLogsPermissions",
-            "Effect": "Allow",
-            "Action": [
-                "logs:CreateLogGroup",
-                "logs:CreateLogStream",
-                "logs:PutLogEvents"
-            ],
-            "Resource": "arn:aws:logs:ap-northeast-1:699962710372:log-group:RangerSpark:*"
-        },
-        {
-            "Sid": "BucketPermissionsInS3Buckets",
-            "Effect": "Allow",
-            "Action": [
-                "s3:CreateBucket",
-                "s3:DeleteBucket",
-                "s3:ListAllMyBuckets",
-                "s3:ListBucket"
-            ],
-            "Resource": "*"
-        },
-        {
-            "Sid": "ObjectPermissionsInS3Objects",
-            "Effect": "Allow",
-            "Action": [
-                "s3:GetObject",
-                "s3:DeleteObject",
-                "s3:PutObject"
-            ],
-            "Resource": "*"
-        },
-        {
-            "Sid": "GlueMetastore",
-            "Effect": "Allow",
-            "Action": [
-                "glue:CreateDatabase",
-                "glue:UpdateDatabase",
-                "glue:DeleteDatabase",
-                "glue:GetDatabase",
-                "glue:GetDatabases",
-                "glue:CreateTable",
-                "glue:UpdateTable",
-                "glue:DeleteTable",
-                "glue:GetTable",
-                "glue:GetTables",
-                "glue:GetTableVersions",
-                "glue:CreatePartition",
-                "glue:BatchCreatePartition",
-                "glue:UpdatePartition",
-                "glue:DeletePartition",
-                "glue:BatchDeletePartition",
-                "glue:GetPartition",
-                "glue:GetPartitions",
-                "glue:BatchGetPartition",
-                "glue:CreateUserDefinedFunction",
-                "glue:UpdateUserDefinedFunction",
-                "glue:DeleteUserDefinedFunction",
-                "glue:GetUserDefinedFunction",
-                "glue:GetUserDefinedFunctions"
-            ],
-            "Resource": "*"
-        }
-    ]
-}
-
 ```
 
 2. 默认EMR的节点会使用EMR_EC2_DefaultRole，但是需要为DefaultRole添加RangerPlugin需要的权限，例如访问Secrets Manager，Assume RangerPluginDataAccessRole的权限
 
 首先创建如下IAM Policy，并将该IAM Policy添加到EMR_EC2_DefaultRole中
 ```
+## IAM Policy: Ranger-EMR-EC2-Role-AddPolicy
+## 注意SecretsManager Resource中的ARN不要带version信息
    {
       "Sid": "AllowAssumeOfRolesAndTagging",
       "Effect": "Allow",
@@ -497,45 +432,6 @@ RangerPlugin需要两项IAM配置：
         ]
     }
 
-##IAM Policy示例如下：Ranger-EMR-EC2-Role-AddPolicy
-##注意SecretsManager Resource中的ARN不要带version信息
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Sid": "AllowAssumeOfRolesAndTagging",
-            "Effect": "Allow",
-            "Action": [
-                "sts:TagSession",
-                "sts:AssumeRole"
-            ],
-            "Resource": [
-                "arn:aws:iam::699962710372:role/RangerPluginDataAccessRole"
-            ]
-        },
-        {
-            "Sid": "AllowSecretsRetrieval",
-            "Effect": "Allow",
-            "Action": "secretsmanager:GetSecretValue",
-            "Resource": [
-                "arn:aws:secretsmanager:ap-northeast-1:699962710372:secret:rangerplugin*",
-                "arn:aws:secretsmanager:ap-northeast-1:699962710372:secret:RangerAdminCert*"
-            ]
-        },
-        {
-            "Sid": "CloudwatchLogsPermissions",
-            "Action": [
-                "logs:CreateLogGroup",
-                "logs:CreateLogStream",
-                "logs:PutLogEvents"
-            ],
-            "Effect": "Allow",
-            "Resource": [
-                "arn:aws:logs:ap-northeast-1:699962710372:log-group:RangerSpark:*"
-            ]
-        }
-    ]
-}
 ```
 
 
@@ -546,6 +442,8 @@ RangerPlugin需要两项IAM配置：
  - Data Access Role ARN
  - RangerAdmin和RangerPlugin在Secrets Manager的ARN
  - PolicyRepositoryName：需要为每个Ranger Plugin指定Ranger Admin上配置的Service Repository Name
+
+**注意：PolicyRepositoryName必须与Ranger Admin Server中的Service Repository Name一致**
 
 ```
 {
@@ -594,58 +492,8 @@ RangerPlugin需要两项IAM配置：
       }
    }
 }
-
-
-##Security Configuration示例如下：保存到RangerSpark-SecurityConfiguration.JSON文件
-
-{
-  "EncryptionConfiguration": {
-    "EnableInTransitEncryption": false,
-    "EnableAtRestEncryption": false
-  },
-  "AuthenticationConfiguration": {
-    "KerberosConfiguration": {
-      "Provider": "ClusterDedicatedKdc",
-      "ClusterDedicatedKdcConfiguration": {
-        "TicketLifetimeInHours": 24
-      }
-    }
-  },
-  "AuthorizationConfiguration": {
-    "RangerConfiguration": {
-      "AdminServerURL": "https://172.31.35.44:8080",
-      "RoleForRangerPluginsARN": "arn:aws:iam::699962710372:role/RangerPluginDataAccessRole",
-      "RoleForOtherAWSServicesARN": "arn:aws:iam::699962710372:role/RangerPluginDataAccessRole",
-      "AdminServerSecretARN": "arn:aws:secretsmanager:ap-northeast-1:699962710372:secret:RangerAdminCert-LQeyAG",
-      "RangerPluginConfigurations": [
-        {
-          "App": "Spark",
-          "ClientSecretARN": "arn:aws:secretsmanager:ap-northeast-1:699962710372:secret:rangerplugin-qU74qc",
-          "PolicyRepositoryName": "amazonemrspark"
-        },
-        {
-          "App": "Hive",
-          "ClientSecretARN": "arn:aws:secretsmanager:ap-northeast-1:699962710372:secret:rangerplugin-qU74qc",
-          "PolicyRepositoryName": "amazonemrhive"
-        },
-        {
-          "App": "EMRFS-S3",
-          "ClientSecretARN": "arn:aws:secretsmanager:ap-northeast-1:699962710372:secret:rangerplugin-qU74qc",
-          "PolicyRepositoryName": "amazonemrs3"
-        }
-      ],
-      "AuditConfiguration": {
-        "Destinations": {
-          "AmazonCloudWatchLogs": {
-            "CloudWatchLogGroup": "arn:aws:logs:ap-northeast-1:699962710372:log-group:RangerSpark:*"
-          }
-        }
-      }
-    }
-  }
-}
 ```
-通过AWS CLI，从JSON文件创建Security Configuratin
+**通过AWS CLI，从JSON文件创建Security Configuratin**
 ```
 aws emr create-security-configuration --name RangerSpark-SecurityConfiguration --security-configuration file://./RangerSpark-SecurityConfiguration.json
 ```

@@ -1,0 +1,37 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "AllowAssumeOfRolesAndTagging",
+            "Effect": "Allow",
+            "Action": [
+                "sts:TagSession",
+                "sts:AssumeRole"
+            ],
+            "Resource": [
+                "arn:aws:iam::699962710372:role/RangerPluginDataAccessRole"
+            ]
+        },
+        {
+            "Sid": "AllowSecretsRetrieval",
+            "Effect": "Allow",
+            "Action": "secretsmanager:GetSecretValue",
+            "Resource": [
+                "arn:aws:secretsmanager:ap-northeast-1:699962710372:secret:rangerplugin*",
+                "arn:aws:secretsmanager:ap-northeast-1:699962710372:secret:RangerAdminCert*"
+            ]
+        },
+        {
+            "Sid": "CloudwatchLogsPermissions",
+            "Action": [
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+            ],
+            "Effect": "Allow",
+            "Resource": [
+                "arn:aws:logs:ap-northeast-1:699962710372:log-group:RangerSpark:*"
+            ]
+        }
+    ]
+}
