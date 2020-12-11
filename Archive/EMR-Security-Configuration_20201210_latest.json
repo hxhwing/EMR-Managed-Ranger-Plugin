@@ -1,0 +1,46 @@
+{
+  "EncryptionConfiguration": {
+    "EnableInTransitEncryption": false,
+    "EnableAtRestEncryption": false
+  },
+  "AuthenticationConfiguration": {
+    "KerberosConfiguration": {
+      "Provider": "ClusterDedicatedKdc",
+      "ClusterDedicatedKdcConfiguration": {
+        "TicketLifetimeInHours": 24
+      }
+    }
+  },
+  "AuthorizationConfiguration": {
+    "RangerConfiguration": {
+      "AdminServerURL": "https://ip-172-31-44-92.ap-northeast-1.compute.internal:6182",
+      "RoleForRangerPluginsARN": "arn:aws:iam::699962710372:role/RangerPluginDataAccessRole",
+      "RoleForOtherAWSServicesARN": "arn:aws:iam::699962710372:role/RangerPluginDataAccessRole",
+      "AdminServerSecretARN": "arn:aws:secretsmanager:ap-northeast-1:699962710372:secret:RangerAdminCert",
+      "RangerPluginConfigurations": [
+        {
+          "App": "Spark",
+          "ClientSecretARN": "arn:aws:secretsmanager:ap-northeast-1:699962710372:secret:rangerplugin",
+          "PolicyRepositoryName": "amazonemrspark"
+        },
+        {
+          "App": "Hive",
+          "ClientSecretARN": "arn:aws:secretsmanager:ap-northeast-1:699962710372:secret:rangerplugin",
+          "PolicyRepositoryName": "amazonemrhive"
+        },
+        {
+          "App": "EMRFS-S3",
+          "ClientSecretARN": "arn:aws:secretsmanager:ap-northeast-1:699962710372:secret:rangerplugin",
+          "PolicyRepositoryName": "amazonemrs3"
+        }
+      ],
+      "AuditConfiguration": {
+        "Destinations": {
+          "AmazonCloudWatchLogs": {
+            "CloudWatchLogGroup": "arn:aws:logs:ap-northeast-1:699962710372:log-group:RangerSpark:*"
+          }
+        }
+      }
+    }
+  }
+}
