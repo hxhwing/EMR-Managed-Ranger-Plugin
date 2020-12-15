@@ -25,6 +25,7 @@
  - 证书必须存放到Secrets Manager中
  - EMR集群上必须启用Kerberos认证
  - Spark Ranger Plugin不支持使用Glue Data Catalog作为Metastore
+ - 当Zeppelin启用LDAP认证，并使用Ranger授权时，需要在EMR每个节点上，包括Master和Core，为每个LDAP用户创建系统用户，Kerberos Principal以及HDFS用户。目前可通过手动执行脚本，完成该任务
 
 
 ## I. 配置Ranger Admin Server
