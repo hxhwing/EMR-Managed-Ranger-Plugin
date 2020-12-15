@@ -25,14 +25,12 @@ REGION="ap-northeast-1"
 SUBNET_ID="subnet-0fb74847"
 INSTANCE_TYPE="m5.xlarge" #Instance Type
 SECURITY_CONFIG="RangerSpark-SecurityConfiguration" #Security config name from EMR
-CLUSTER_CONFIG="file://./EMR-ClusterConfiguration.json"
 
 # Hardcoded variables, please do not change. 
 RPM_REPLACEMENT_SCRIPT=s3://repo.ap-northeast-1.emr-bda.amazonaws.com/replace_rpms.sh 
 PUPPET_UPGRADE_SCRIPT=s3://repo.ap-northeast-1.emr-bda.amazonaws.com/update_puppet.sh 
 PUPPET_SCRIPTS_REPLACEMENT=s3://repo.ap-northeast-1.emr-bda.amazonaws.com/replace_puppet.sh 
 REPLACE_NODE_PROVISIONER=s3://repo.ap-northeast-1.emr-bda.amazonaws.com/replace_node_provisioner.sh
-ZEPPELIN_SCRIPT=s3://hxh-tokyo/EMR-Managed-Ranger/zeppelin/zeppelin-bootstrap.sh
 
 # Generating EMR Configuration JSON. Enter any extra configurations that you may need, such as Hue configuration to integrate with LDAP.
 # cat <<EOT > ./emr_ranger_configs.json
@@ -46,7 +44,6 @@ aws emr create-cluster --profile $AWS_CREDENTIALS_PROFILE \
 --release-label $RELEASE_LABEL \
 --use-default-roles \
 --enable-debugging \
---configurations $CLUSTER_CONFIG \
 --security-configuration $SECURITY_CONFIG \
 --kerberos-attributes Realm=$REALM,KdcAdminPassword=$KERBEROS_PASSWORD \
 --ec2-attributes KeyName=$KEYPAIR,SubnetId=$SUBNET_ID \
@@ -60,5 +57,4 @@ InstanceGroupType=CORE,InstanceCount=$CORE_NODES,InstanceType=$INSTANCE_TYPE \
 Name='Replace RPMs',Path="$RPM_REPLACEMENT_SCRIPT" \
 Name='Upgrade Puppet',Path="$PUPPET_UPGRADE_SCRIPT" \
 Name='Replace Puppet Scripts Plugin',Path="$PUPPET_SCRIPTS_REPLACEMENT" \
-Name='Replace Node Provisioner',Path="$REPLACE_NODE_PROVISIONER" \
-Name='Zeppelin script',Path="$ZEPPELIN_SCRIPT"
+Name='Replace Node Provisioner',Path="$REPLACE_NODE_PROVISIONER"

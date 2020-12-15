@@ -10,6 +10,8 @@
   * [V. 启动EMR集群](#v-启动EMR集群)
   * [VI. 验证Ranger策略](#vi-验证Ranger策略)
   * [VII. Kerberos认证](#vii-Kerberos认证)
+  * [VIII. 使用Zeppelin Notebook](#viii-使用Zeppelin-Notebook)
+  
 
 ## Limitation
 
@@ -523,6 +525,7 @@ REGION="ap-northeast-1"
 SUBNET_ID="subnet-0fb74847"
 INSTANCE_TYPE="m5.xlarge" #Instance Type
 SECURITY_CONFIG="RangerSpark-SecurityConfiguration" #Security config name from EMR
+CLUSTER_CONFIG="file://./EMR-ClusterConfiguration.json"
 
 # Keberos Details
 KERBEROS_PASSWORD="amazon" # password for Kerberos KDC 
@@ -533,6 +536,7 @@ RPM_REPLACEMENT_SCRIPT=s3://repo.ap-northeast-1.emr-bda.amazonaws.com/replace_rp
 PUPPET_UPGRADE_SCRIPT=s3://repo.ap-northeast-1.emr-bda.amazonaws.com/update_puppet.sh 
 PUPPET_SCRIPTS_REPLACEMENT=s3://repo.ap-northeast-1.emr-bda.amazonaws.com/replace_puppet.sh 
 REPLACE_NODE_PROVISIONER=s3://repo.ap-northeast-1.emr-bda.amazonaws.com/replace_node_provisioner.sh
+ZEPPELIN_SCRIPT=s3://hxh-tokyo/EMR-Managed-Ranger/zeppelin/zeppelin-bootstrap.sh
 
 # Create the cluster.
 aws emr create-cluster --profile $AWS_CREDENTIALS_PROFILE \
@@ -541,6 +545,7 @@ aws emr create-cluster --profile $AWS_CREDENTIALS_PROFILE \
 --release-label $RELEASE_LABEL \
 --use-default-roles \
 --enable-debugging \
+--configurations $CLUSTER_CONFIG \
 --security-configuration $SECURITY_CONFIG \
 --kerberos-attributes Realm=$REALM,KdcAdminPassword=$KERBEROS_PASSWORD \
 --ec2-attributes KeyName=$KEYPAIR,SubnetId=$SUBNET_ID \
@@ -554,7 +559,8 @@ InstanceGroupType=CORE,InstanceCount=$CORE_NODES,InstanceType=$INSTANCE_TYPE \
 Name='Replace RPMs',Path="$RPM_REPLACEMENT_SCRIPT" \
 Name='Upgrade Puppet',Path="$PUPPET_UPGRADE_SCRIPT" \
 Name='Replace Puppet Scripts Plugin',Path="$PUPPET_SCRIPTS_REPLACEMENT" \
-Name='Replace Node Provisioner',Path="$REPLACE_NODE_PROVISIONER"
+Name='Replace Node Provisioner',Path="$REPLACE_NODE_PROVISIONER" \
+Name='Zeppelin script',Path="$ZEPPELIN_SCRIPT"
 
 ```
 运行create_emr_ranger_cluster.sh，即自动创建EMR集群。
@@ -682,5 +688,215 @@ kadmin.local:
 
 ```
 
+## VIII. 使用Zeppelin Notebook
 
+在EMR集群启用Kerberos认证后，在/etc/zeppelin/conf/zeppelin-env.sh中，会自动添加Kerberos相关的Principal和keytab信息。
+
+```
+export ZEPPELIN_SERVER_KERBEROS_KEYTAB="/etc/zeppelin.keytab"
+export ZEPPELIN_SERVER_KERBEROS_PRINCIPAL="zeppelin/ip-172-31-42-250.ap-northeast-1.co
+mpute.internal@EC2.INTERNAL"
+```
+
+而EMR中的Zeppelin Notebook登录，默认不需要认证，使用匿名用户登录，且默认使用“Zeppelin”用户名去提交Shell或Spark任务。
+在Spark启用Ranger授权的情况下，直接在Zeppelin Notebook中提交Spark任务时，会有如下报错，原因是用于Ranger的RecordServer library没有添加到Zeppelin Class path中。
+```
+java.lang.IllegalArgumentException: Error while instantiating 'com.amazonaws.emr.recordserver.catalog.RecordServerRemoteCatalog':
+```
+
+**需要增加以下Bootstrap脚本，配置Zeppelin: zeppelin-bootstrap.sh**
+```
+#!/bin/bash -ex
+ 
+instanceRole=`cat /mnt/var/lib/info/extraInstanceData.json | grep instanceRole | cut -f2 -d: | cut -f2 -d'"'`
+ 
+if [[ "$instanceRole" == "master" ]]; then
+    echo "I am on master. "
+
+    sudo aws s3 cp s3://hxh-tokyo/EMR-Managed-Ranger/zeppelin/90-zeppelin-user /etc/sudoers.d/
+ 
+    sudo sh -c "echo 'ZEPPELIN_IMPERSONATE_USER=\`echo \${ZEPPELIN_IMPERSONATE_USER} | cut -d "@" -f1\`' >>  /var/aws/emr/bigtop-deploy/puppet/modules/zeppelin/templates/zeppelin-env.sh"
+    sudo sh -c 'echo "export ZEPPELIN_IMPERSONATE_CMD='\''sudo -H -u \$'{ZEPPELIN_IMPERSONATE_USER}' bash -c'\''" >> /var/aws/emr/bigtop-deploy/puppet/modules/zeppelin/templates/zeppelin-env.sh'
+ 
+    #Disable Public Notebooks by default
+    sudo sh -c "echo 'export ZEPPELIN_NOTEBOOK_PUBLIC=\"false\"' >> /var/aws/emr/bigtop-deploy/puppet/modules/zeppelin/templates/zeppelin-env.sh"
+ 
+    #Add Recordserver libs to the classpath.
+    sudo sh -c "echo 'export CLASSPATH=\"\$CLASSPATH:/usr/share/aws/emr/record-server/lib/aws-emr-record-server-connector-common.jar:/usr/share/aws/emr/record-server/lib/aws-emr-record-server-spark-connector.jar:/usr/share/aws/emr/record-server/lib/aws-emr-record-server-client.jar:/usr/share/aws/emr/record-server/lib/aws-emr-record-server-common.jar:/usr/share/aws/emr/record-server/lib/jars/secret-agent-interface.jar\"' >> /var/aws/emr/bigtop-deploy/puppet/modules/zeppelin/templates/zeppelin-env.sh"
+ 
+else
+    echo "Im on slave. Not doing anything."
+fi
+```
+
+**在启动EMR集群的时候，需要添加以下配置，用于启用Zeppelin User Impersonate**
+```
+[
+   {
+      "Classification":"core-site",
+      "Properties":{
+         "hadoop.proxyuser.zeppelin.hosts":"*",
+         "hadoop.proxyuser.zeppelin.groups":"*",
+         "hadoop.proxyuser.livy.groups":"*",
+         "hadoop.proxyuser.livy.hosts":"*"
+      },
+      "Configurations":[
+      ]
+   }, {
+      "Classification":"hadoop-kms-site",
+      "Properties":{
+         "hadoop.proxyuser.zeppelin.hosts":"*",
+         "hadoop.proxyuser.zeppelin.groups":"*",
+         "hadoop.proxyuser.livy.groups":"*",
+         "hadoop.proxyuser.livy.hosts":"*",
+         "hadoop.kms.proxyuser.livy.users":"*",
+         "hadoop.kms.proxyuser.livy.hosts":"*",
+         "hadoop.kms.proxyuser.livy.groups":"*",
+         "hadoop.kms.proxyuser.yarn.users":"*",
+         "hadoop.kms.proxyuser.yarn.groups":"*",
+         "hadoop.kms.proxyuser.yarn.hosts":"*",
+         "hadoop.kms.proxyuser.zeppelin.groups":"*",
+         "hadoop.kms.proxyuser.zeppelin.hosts":"*",
+         "hadoop.kms.proxyuser.zeppelin.users":"*",
+         "hadoop.proxyuser.livy.users":"*",
+         "hadoop.proxyuser.zeppelin.users":"*"
+      },
+      "Configurations":[
+      ]
+   }, {
+      "Classification":"livy-conf",
+      "Properties":{
+         "livy.superusers":"hue,livy",
+         "livy.repl.enable-hive-context":"true",
+         "livy.impersonation.enabled":"true"
+      },
+      "Configurations":[
+      ]
+   }
+]
+```
+
+### 为Zeppelin启用认证
+Zeppelin使用Shiro，可提供UsernamePassword/LDAP/AD的认证方式，只能启用一种认证方式，否则Zeppelin服务会有问题。
+
+首先登录EMR Master，为Zeppelin启用账号密码认证，用于登录修改Zeppelin默认的Interpreter配置。
+```
+cd /etc/zeppelin/conf/
+sudo cp shiro.ini.template shiro.ini
+
+## 首先启用admin账户， 默认密码为password1
+sudo sed -i "s|#admin = password1, admin|admin = password1, admin|g" shiro.ini
+
+## 重启zeppelin服务
+sudo service zeppelin restart
+```
+
+使用admin用户登录Zeppelin，默认密码password1
+
+![Zeppelin admin](./Pictures/Zeppelin-admin.png)
+
+默认所有任务都是通过‘Zeppelin'这个用户提交
+
+![Before impersonate](./Pictures/Before-impersonate.png)
+
+**修改Intepreter配置，启用User Impersonate，并保存配置。启用之后Zeppelin会使用登录的用户去提交Spark任务。**
+![Spark interpreter](./Pictures/Spark-interpreter.png)
+
+**重复上一步，为Shell，Livy的Interpreter启用User impersonate。**
+
+### 为Zeppelin启用LDAP认证
+
+登录EMR Master，修改/etc/zeppelin/conf/shiro.ini，注释[user]中的所有账号配置，在[main]中，添加LDAP配置。
+
+```
+##/etc/zeppelin/conf/shiro.ini 
+[users]
+#admin = password1, admin
+#user1 = password2, role1, role2
+#user2 = password3, role3
+#user3 = password4, role2
+
+[main]
+ldapRealm = org.apache.zeppelin.realm.LdapGroupRealm
+ldapRealm.contextFactory.environment[ldap.searchBase] = dc=ap-northeast-1,dc=compute,dc=internal
+ldapRealm.contextFactory.url = ldap://ip-172-31-36-146.ap-northeast-1.compute.internal:389
+ldapRealm.userDnTemplate = uid={0},dc=ap-northeast-1,dc=compute,dc=internal
+ldapRealm.contextFactory.authenticationMechanism = simple
+
+## 重启Zeppelin服务生效
+sudo service zeppelin restart
+```
+
+**使用LDAP用户名密码，登录Zeppelin**
+
+例如使用LDAP中的hive用户登录，确认用户，执行Spark查询。
+
+**注意：由于EMR 集群启用了Kerberos认证，所以还需要在EMR集群中，为每个LDAP用户创建EMR用户，对应的Kerberos Principal，以及HDFS目录，LDAP用户登录后，才能执行Spark任务**
+
+因为hive用户在EMR中已经存在Kerberos principal，所以可以使用Spark，但是在Ranger中，没有对hive用户授权，所以不能执行Select
+
+![LDAP no permission](./Pictures/LDAP-nopermission.png)
+
+在Ranger Admin的AMAZON-EMR-SPARK Service Repository中，为hive用户添加Select权限。
+
+![Ranger-add-policy](./Pictures/Ranger-add-policy.png)
+
+
+再次在Zeppelin中执行Select，验证Spark已从Ranger admin同步授权策略。
+
+![Ranger-zeppelin](./Pictures/Ranger-zeppelin.png)
+
+
+### 为LDAP用户在EMR所有节点上创建用户，Kerberos principal，HDFS用户以及目录
+
+**需要在所有EMR节点上，包括所有Master node和Core Node，执行add-user-job.sh脚本**
+
+脚本参数需要指定：
+ - User password
+ - Kerberos Realm
+ - Username
+
+```
+## 下载添加用户脚本，并执行，例如添加LDAP用户User2到EMR中
+aws s3 cp s3://aws-emr-bda-public/ranger-private-beta/v4/scripts/ba/add-user-job.sh .
+chmod +x add-user-job.sh
+./add-user-job.sh amazon EC2.INTERNAL user2
+
+##脚本执行完成后，自动为指定的LDAP用户，创建用户，用户目录，Kerberos Principal，HDFS用户，以及用户目录
+[hadoop@ip-172-31-45-35 ~]$ sudo ls -l /home/user2/
+total 4
+-r-------- 1 user2 root 206 Dec 15 14:54 user2.keytab
+[hadoop@ip-172-31-45-35 ~]$ hadoop fs -ls /user/
+Found 11 items
+drwxrwxrwx   - hadoop   hadoop          0 2020-12-15 10:17 /user/hadoop
+drwxr-xr-x   - mapred   mapred          0 2020-12-15 10:17 /user/history
+drwxrwxrwx   - hdfs     hadoop          0 2020-12-15 13:42 /user/hive
+drwxrwxrwx   - hue      hue             0 2020-12-15 10:17 /user/hue
+drwxrwxrwx   - livy     livy            0 2020-12-15 10:17 /user/livy
+drwxrwxrwx   - oozie    oozie           0 2020-12-15 10:19 /user/oozie
+drwxrwxrwx   - root     hadoop          0 2020-12-15 10:17 /user/root
+drwxrwxrwx   - spark    spark           0 2020-12-15 10:17 /user/spark
+drwxr-xr-x   - user1    user1           0 2020-12-15 14:08 /user/user1
+drwxr-xr-x   - user2    user2           0 2020-12-15 14:48 /user/user2
+drwxrwxrwx   - zeppelin hadoop          0 2020-12-15 12:47 /user/zeppelin
+[hadoop@ip-172-31-45-35 ~]$
+
+```
+
+脚本执行完成后，并且已经为LDAP用户在Ranger Admin上添加了权限，即可使用LDAP用户登录Zeppelin，执行Spark任务。
+
+
+![LDAP-zeppelin](./Pictures/LDAP-zeppelin.png)
+
+**注意：如果add-user-job的脚本在某个node上未执行或执行失败，则会提示User not found错误**
+
+```
+main : run as user is user2
+main : requested yarn user is user2
+User user2 not found
+```
+
+**注意：如果通过step提交add-user-job的脚本，则可以在所有节点上创建HDFS用户和目录，但是无法创建操作系统用户和Kerberos Principal**
+
+**另外，提供了一个LDAP-add-user-job.sh的脚本，可以自动从LDAP中获取所有用户，并创建系统用户，Kerberos principal，HDFS用户以及目录，供参考**
 

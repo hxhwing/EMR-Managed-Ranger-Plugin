@@ -1,0 +1,4 @@
+# Created by cloud-init v. 19.3-3.amzn2 on Fri, 30 Oct 2020 17:41:21 +0000
+
+# User rules for ec2-user
+zeppelin ALL=(ALL) NOPASSWD:ALL

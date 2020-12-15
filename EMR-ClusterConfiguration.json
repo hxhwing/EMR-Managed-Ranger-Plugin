@@ -1,0 +1,43 @@
+[
+   {
+      "Classification":"core-site",
+      "Properties":{
+         "hadoop.proxyuser.zeppelin.hosts":"*",
+         "hadoop.proxyuser.zeppelin.groups":"*",
+         "hadoop.proxyuser.livy.groups":"*",
+         "hadoop.proxyuser.livy.hosts":"*"
+      },
+      "Configurations":[
+      ]
+   }, {
+      "Classification":"hadoop-kms-site",
+      "Properties":{
+         "hadoop.proxyuser.zeppelin.hosts":"*",
+         "hadoop.proxyuser.zeppelin.groups":"*",
+         "hadoop.proxyuser.livy.groups":"*",
+         "hadoop.proxyuser.livy.hosts":"*",
+         "hadoop.kms.proxyuser.livy.users":"*",
+         "hadoop.kms.proxyuser.livy.hosts":"*",
+         "hadoop.kms.proxyuser.livy.groups":"*",
+         "hadoop.kms.proxyuser.yarn.users":"*",
+         "hadoop.kms.proxyuser.yarn.groups":"*",
+         "hadoop.kms.proxyuser.yarn.hosts":"*",
+         "hadoop.kms.proxyuser.zeppelin.groups":"*",
+         "hadoop.kms.proxyuser.zeppelin.hosts":"*",
+         "hadoop.kms.proxyuser.zeppelin.users":"*",
+         "hadoop.proxyuser.livy.users":"*",
+         "hadoop.proxyuser.zeppelin.users":"*"
+      },
+      "Configurations":[
+      ]
+   }, {
+      "Classification":"livy-conf",
+      "Properties":{
+         "livy.superusers":"hue,livy",
+         "livy.repl.enable-hive-context":"true",
+         "livy.impersonation.enabled":"true"
+      },
+      "Configurations":[
+      ]
+   }
+]
